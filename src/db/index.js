@@ -14,3 +14,5 @@ const connectDB = async () => {
   }
 };
 export default connectDB;
+
+// async function returns promise
