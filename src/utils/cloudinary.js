@@ -15,7 +15,7 @@ const uploadOnCloudinary = async (localFilePath) => {
       resource_type: "auto", // automatically detect type of file
     });
     // file uploaded successfully
-    console.log("file uploaded successfully ", response.url);
+    fs.unlinkSync(localFilePath); // removing file after uploading
      return response;
   } catch (error) {
     fs.unlinkSync(localFilePath); // remove the locally saved temperory file as the upload operation got failed
