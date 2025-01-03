@@ -9,7 +9,7 @@ export const verifyJWT = asyncHandler(async(req, _,next)=>{
     try {
         // token from cookies
          const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ","");
-         // here if dont have cookies is not present eg in some mobile request there is key Authorization in header with value "Bearer <token>" so we are taking token from there.
+         // here if dont have cookies is not present eg in some mobile application there is key Authorization in header with value "Bearer <token>" so we are taking token from there.
          if(!token){
             throw new ApiError(401,"Unauthorized request")
          }
