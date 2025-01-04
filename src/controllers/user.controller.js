@@ -3,7 +3,7 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
 const generateAccessandRefreshTokens = async (userId) => {
   try {
@@ -176,49 +176,149 @@ const logoutUser = asyncHandler(async (req, res) => {
 });
 
 // refreshToken (in our db) se accessToken ko refresh karna.
-const refreshAccessToken = asyncHandler(async (req, res)=>{
+const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken =
     req.cookies.refreshToken || req.body.refreshToken;
   if (!incomingRefreshToken) {
-    throw new ApiError(401,"unauthorised request");
+    throw new ApiError(401, "unauthorised request");
   }
- try {
-  const decodedToken = jwt.verifyJWT(
-     incomingRefreshToken,
-     process.env.REFRESH_TOKEN_SECRET
-   )
-   // incoming refreshToken  ko decode kiya using secret key and us se id li aur usse user mila
-   const user= await User.findById(decodedToken?._id);
-  // agar woh user exist karta hai to
-   if(!user){
-     throw new ApiError(401,"Invalid refresh token");
-   }
-   // first match the incoming refreshToken the give the access i.e accessToken
-   if(incomingRefreshToken !== user?.refreshToken){
-       throw new ApiError(401,"Refresh token is expired or used");
-   }
-   // sending new access token in cookies.
-   const options={
-     httpOnly:true,
-     secure: true
-   }
-   const {accessToken,newRefreshToken}=await generateAccessandRefreshTokens(user._id)
-   return res
-   .status(200)
-   .cookie("accessToken",accessToken,options)
-   .cookie("refreshToken",newRefreshToken,options)
-   .json(
-     new ApiResponse(
-       200,{
-         accessToken,refreshToken: newRefreshToken
-       },
-       "Access token refreshed"
-     )
-   )
- } catch (error) {
-    throw new ApiError(401,error?.message || "Invalid refresh token" )
- }
-})
-;
+  try {
+    const decodedToken = jwt.verifyJWT(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+    // incoming refreshToken  ko decode kiya using secret key and us se id li aur usse user mila
+    const user = await User.findById(decodedToken?._id);
+    // agar woh user exist karta hai to
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+    // first match the incoming refreshToken the give the access i.e accessToken
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+    // sending new access token in cookies.
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+    const { accessToken, newRefreshToken } =
+      await generateAccessandRefreshTokens(user._id);
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            accessToken,
+            refreshToken: newRefreshToken,
+          },
+          "Access token refreshed"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid refresh token");
+  }
+});
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+  // we wont verify here but use our auth middleware before executing this method in the routes
+  const { oldPassword, newPassword } = req.body; // yeh oldPassword and newPassword user dega request mai.
+  // auth middleware chala hai means req.user ke pass user hai as we added it in that
+  const user = await User.findById(req.user?._id);
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Invalid old password");
+  }
+  user.password = newPassword;
+  await user.save({ validateBeforeSave: false });
+  return res
+  .status(200)
+  .json(new ApiResponse(200,{},"Password changed successfully"))
+});
+
+const getCurrentUser= asyncHandler(async (req , res)=>{
+  return
+  res
+  .status(200)
+  .json(200,req.user,"current user fetched successfully")
+});
+
+const updateAccountDetails = asyncHandler(async(req,res)=>{
+  const {fullName,email} = req.body
+// updating both
+  if(!fullName && !email){
+    throw new ApiError(400,"atleast one fields are required")
+  }
+  User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        fullName:fullName,
+        email:email
+      }
+    },
+    {new : true}
+  ).select("-password")
+  return res
+  .status(200)
+  .json(new ApiResponse(200,user,"Account details updated successfully"))
+});
+
+const updateUserAvatar = asyncHandler(async(req,res)=>{
+
+  const avatarLocalPath=req.file?.path
+  if(!avatarLocalPath){
+    throw new ApiError(400,"Avatar file is missing")
+  }
+  const avatar= await uploadOnCloudinary(avatarLocalPath);
+  if(!avatar.url){
+    throw new ApiError(400,"Error while uploading on avatar")
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set:{avatar:avatar.url}
+    },
+    {new : true}
+  ).select("-password")
+  return res
+  .status(200)
+  .json(new ApiResponse(200,user,"Avatar updated successfullly"))
+});
+
+const updateUserCoverImage = asyncHandler(async(req,res)=>{
+
+  const coverImageLocalPath=req.file?.path
+  if(!coverImageLocalPath){
+    throw new ApiError(400,"cover image file is missing")
+  }
+  const coverImage= await uploadOnCloudinary(coverImageLocalPath);
+  if(!coverImage.url){
+    throw new ApiError(400,"Error while uploading cover image")
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set:{coverImage:coverImage.url}
+    },
+    {new : true}
+  ).select("-password")
+  return res
+  .status(200)
+  .json(new ApiResponse(200,user,"cover image updated successfully"))
+});
+
+export { registerUser,
+  updateUserCoverImage,
+  updateUserAvatar,
+  updateAccountDetails, 
+  loginUser, 
+  logoutUser, 
+  refreshAccessToken,
+  changeCurrentPassword,
+  getCurrentUser };
