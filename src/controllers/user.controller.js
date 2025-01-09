@@ -359,7 +359,6 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
       // send additional fields with the user object
       $addFields: {
         subscribersCount: {
-       
           $size: $subscribers,
         },
         channelsSubscribedToCount: {
@@ -377,32 +376,81 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         },
       },
     },
-    {// choosing the values i want to send
-      $project:{
+    {
+      // choosing the values i want to send
+      $project: {
         fullName: 1,
-        username:1,
-        subscribersCount:1,
-        channelsSubscribedToCount:1,
-        avatar:1,
-        coverImage:1,
-        email:1,
-
-      }
-    }
+        username: 1,
+        subscribersCount: 1,
+        channelsSubscribedToCount: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
   ]);
-  if(!channel?.length){
-    throw new ApiError(404,"channel does not exist")
+  if (!channel?.length) {
+    throw new ApiError(404, "channel does not exist");
   }
   // channel is an array of object // here it will contain only info about one user that we matched
   return res
-  .status(200)
-  .json(
-    new ApiResponse(200,channel[0],"User channel fetched successfully")
-  )
+    .status(200)
+    .json(
+      new ApiResponse(200, channel[0], "User channel fetched successfully")
+    );
 });
 
-console.log("user channel profilee  ",getUserChannelProfile);
-
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+        // here we are converting to ObjectId becoz in aggregate mongoose does not directly work so req.user._id return an id like 123fasrwrfasr but not the ObjectId(123fasrwrfasr) which is the mongoDb id, at other places outside aggregate, mongoose automatically converts the id to mongoDB obj id.
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [{ 
+                $project: {
+                  fullName:1,
+                  username:1,
+                  avatar:1,
+              }   
+            }],
+            },
+          },
+          {
+            $addFields:{
+              // this will overwrite the existing onwer
+              owner:{
+                // owner array ka first value
+                $first:"$owner"
+              }
+            }
+          }
+        ],
+      },
+    },
+  ]);
+  return res
+  .status(200)
+  .json(
+    new ApiResponse(200,user[0].watchHistory,
+      "Watch history fetched successfully"
+    )
+  )
+});
 
 export {
   registerUser,
@@ -414,5 +462,6 @@ export {
   refreshAccessToken,
   changeCurrentPassword,
   getCurrentUser,
-  getUserChannelProfile
+  getUserChannelProfile,
+  getWatchHistory,
 };
